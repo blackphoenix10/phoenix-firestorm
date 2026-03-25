@@ -294,6 +294,7 @@ using namespace LL;
 #include "aoengine.h"
 #include "fsradar.h"
 #include "fsassetblacklist.h"
+#include "fsmcpserver.h"
 #include "bugsplatattributes.h"
 
 #if LL_LINUX && LL_GTK
@@ -1491,6 +1492,13 @@ bool LLAppViewer::init()
     // Create IO Pump to use for HTTP Requests.
     gServicePump = new LLPumpIO(gAPRPoolp);
 
+    // Start the MCP server if enabled via settings
+    if (gSavedSettings.getBOOL("FSMCPServerEnabled"))
+    {
+        U16 mcp_port = (U16)gSavedSettings.getU32("FSMCPServerPort");
+        FSMCPServer::instance().start(mcp_port);
+    }
+
     // Note: this is where gLocalSpeakerMgr and gActiveSpeakerMgr used to be instantiated.
 
     LLVoiceChannel::initClass();
@@ -1732,6 +1740,11 @@ bool LLAppViewer::doFrame()
                 pingMainloopTimeout("df mainloop");
                 // canonical per-frame event
                 mainloop.post(newFrame);
+            }
+            {
+                LL_PROFILE_ZONE_NAMED_CATEGORY_APP("df MCPServer");
+                // Dispatch any queued MCP tool calls to the main thread
+                FSMCPServer::instance().processQueue();
             }
             {
                 LL_PROFILE_ZONE_NAMED_CATEGORY_APP("df suspend");
@@ -1987,6 +2000,12 @@ bool LLAppViewer::doFrame()
         if (LLVoiceClient::instanceExists())
         {
             LLVoiceClient::getInstance()->terminate();
+        }
+
+        pingMainloopTimeout("Main:TerminateMCPServer");
+        if (FSMCPServer::instanceExists())
+        {
+            FSMCPServer::instance().stop();
         }
 
         pingMainloopTimeout("Main:TerminatePump");

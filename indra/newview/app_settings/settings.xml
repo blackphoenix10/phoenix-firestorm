@@ -2,6 +2,28 @@
 <llsd xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xsi:noNamespaceSchemaLocation="llsd.xsd">
 <map>
+  <key>FSMCPServerEnabled</key>
+  <map>
+    <key>Comment</key>
+    <string>Enable the MCP (Model Context Protocol) localhost server so Firestorm can be controlled by an MCP client over a local TCP connection.</string>
+    <key>Persist</key>
+    <integer>1</integer>
+    <key>Type</key>
+    <string>Boolean</string>
+    <key>Value</key>
+    <integer>1</integer>
+  </map>
+  <key>FSMCPServerPort</key>
+  <map>
+    <key>Comment</key>
+    <string>TCP port for the localhost-only MCP server.</string>
+    <key>Persist</key>
+    <integer>1</integer>
+    <key>Type</key>
+    <string>U32</string>
+    <key>Value</key>
+    <integer>18080</integer>
+  </map>
   <key>FSLandmarkCreatedNotification</key>
   <map>
     <key>Comment</key>

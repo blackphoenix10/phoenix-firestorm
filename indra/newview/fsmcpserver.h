@@ -34,15 +34,17 @@
 #include <memory>
 #include <mutex>
 #include <queue>
+#include <map>
 #include <string>
+#include <vector>
 
 /**
  * FSMCPServer
  *
- * Implements an HTTP/1.1 server that exposes Firestorm viewer functionality
- * via the Model Context Protocol (MCP) using JSON-RPC 2.0.
+ * Implements a localhost MCP server that exposes Firestorm viewer
+ * functionality via JSON-RPC 2.0 over a local TCP transport.
  *
- * Default port: 18080.  Enable via the FSMCPServerEnabled viewer setting.
+ * Enable via the FSMCPServerEnabled viewer setting.
  *
  * Supported MCP methods:
  *   initialize      – MCP handshake
@@ -59,6 +61,7 @@
  *   navigate_to         – auto-pilot the avatar to world coordinates
  *   set_flying          – enable or disable flight
  *   stand_up            – stand up if currently sitting
+ *   open_inventory      – open the My Inventory floater
  */
 class FSMCPServer final : public LLSingleton<FSMCPServer>
 {
@@ -66,8 +69,8 @@ class FSMCPServer final : public LLSingleton<FSMCPServer>
     ~FSMCPServer();
 
 public:
-    /** Start the HTTP listener on @p port (default 18080). */
-    void start(U16 port = 18080);
+    /** Start the localhost MCP server thread. */
+    void start(U16 port);
 
     /** Stop the HTTP listener.  Safe to call when already stopped. */
     void stop();
@@ -82,6 +85,8 @@ public:
     void processQueue();
 
 private:
+    typedef LLSD (FSMCPServer::*tool_handler_t)(const LLSD& args);
+
     // -----------------------------------------------------------------------
     // Internal types
     // -----------------------------------------------------------------------
@@ -92,6 +97,14 @@ private:
         std::string        method;
         LLSD               params;
         std::promise<LLSD> result_promise;
+    };
+
+    struct ToolDefinition
+    {
+        std::string   name;
+        std::string   description;
+        LLSD          input_schema;
+        tool_handler_t handler;
     };
 
     // -----------------------------------------------------------------------
@@ -109,9 +122,16 @@ private:
     LLSD handleToolsList();
     LLSD handleToolsCall(const LLSD& params);
 
+    void registerTool(const std::string& name,
+                      const std::string& description,
+                      const LLSD& input_schema,
+                      tool_handler_t handler);
+    void registerBuiltInTools();
+
     // Viewer tool implementations (all called from the main thread) ----------
     LLSD toolGetViewerStatus(const LLSD& args);
     LLSD toolGetAgentInfo(const LLSD& args);
+    LLSD toolGetWornAttachments(const LLSD& args);
     LLSD toolGetNearbyAvatars(const LLSD& args);
     LLSD toolGetRegionInfo(const LLSD& args);
     LLSD toolSendChat(const LLSD& args);
@@ -119,12 +139,23 @@ private:
     LLSD toolNavigateTo(const LLSD& args);
     LLSD toolSetFlying(const LLSD& args);
     LLSD toolStandUp(const LLSD& args);
+    LLSD toolOpenInventory(const LLSD& args);
+    LLSD toolGetInventoryContents(const LLSD& args);
+    LLSD toolMoveInventoryObject(const LLSD& args);
+    LLSD toolWearInventoryItem(const LLSD& args);
+    LLSD toolFindSystemFolder(const LLSD& args);
+    LLSD toolCreateInventoryFolder(const LLSD& args);
+    LLSD toolGetFolderCreationResult(const LLSD& args);
+    LLSD toolRenameInventoryObject(const LLSD& args);
+    LLSD toolListViewerCommands(const LLSD& args);
+    LLSD toolExecuteViewerCommand(const LLSD& args);
+    LLSD toolExecuteRlvCommand(const LLSD& args);
 
     /** Build the full tools-list LLSD array. */
     LLSD buildToolsList() const;
 
     // -----------------------------------------------------------------------
-    // Background HTTP server thread
+    // Background server thread
     // -----------------------------------------------------------------------
     class ServerThread;
     friend class ServerThread;
@@ -134,6 +165,13 @@ private:
     // Shared state protected by mQueueMutex
     mutable std::mutex mQueueMutex;
     std::queue<std::shared_ptr<PendingCall>> mCallQueue;
+
+    std::vector<ToolDefinition> mTools;
+    std::map<std::string, U32>  mToolIndexByName;
+
+    // Pending async folder creations (request_id -> result UUID, null while pending)
+    mutable std::mutex            mFolderCreationMutex;
+    std::map<std::string, LLUUID> mFolderCreationResults;
 
     bool mRunning { false };
     U16  mPort    { 18080 };
